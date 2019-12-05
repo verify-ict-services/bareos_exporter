@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/dreyau/bareos_exporter/dataaccess"
+	"./dataaccess"
 	"github.com/prometheus/client_golang/prometheus"
 
 	log "github.com/sirupsen/logrus"
@@ -20,7 +20,7 @@ type bareosMetrics struct {
 	LastFullJobErrors    *prometheus.Desc
 	LastFullJobTimestamp *prometheus.Desc
 
-	ScheduledJob    *prometheus.Desc
+	ScheduledJob *prometheus.Desc
 }
 
 func bareosCollector() *bareosMetrics {
@@ -110,7 +110,7 @@ func (collector *bareosMetrics) Collect(ch chan<- prometheus.Metric) {
 		lastFullServerJob, fullJobErr := connection.LastFullJob(server)
 		scheduledJob, scheduledJobErr := connection.ScheduledJobs(server)
 
-		if filesErr != nil || bytesErr != nil || jobErr != nil || fullJobErr != nil || scheduledJobErr != nil{
+		if filesErr != nil || bytesErr != nil || jobErr != nil || fullJobErr != nil || scheduledJobErr != nil {
 			log.Info(server)
 		}
 
@@ -146,7 +146,6 @@ func (collector *bareosMetrics) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(collector.LastFullJobFiles, prometheus.CounterValue, float64(lastFullServerJob.JobFiles), server)
 		ch <- prometheus.MustNewConstMetric(collector.LastFullJobErrors, prometheus.CounterValue, float64(lastFullServerJob.JobErrors), server)
 		ch <- prometheus.MustNewConstMetric(collector.LastFullJobTimestamp, prometheus.CounterValue, float64(lastFullServerJob.JobDate.Unix()), server)
-
 
 		ch <- prometheus.MustNewConstMetric(collector.ScheduledJob, prometheus.CounterValue, float64(scheduledJob.ScheduledJobs), server)
 	}

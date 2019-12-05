@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/dreyau/bareos_exporter/error"
+	"./error"
 
 	"flag"
 	"fmt"
