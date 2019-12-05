@@ -9,7 +9,7 @@ jobs:
       uses: elgohr/Publish-Docker-Github-Action@2.9
       with:
         name: vierbergenlars/bareos_exporter
-        username: ${{ secrets.DOCKER_USERNAME }}
+        username: vierbergenlars
         password: ${{ secrets.DOCKER_PASSWORD }}
         snapshot: true
         tag_names: true
