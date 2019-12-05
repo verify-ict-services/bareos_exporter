@@ -1,5 +1,8 @@
 name: Build release binaries
-on: release
+on:
+    release:
+        types:
+            - published
 jobs:
   release-linux-386:
     name: release linux/386
