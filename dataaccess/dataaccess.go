@@ -79,7 +79,7 @@ func (connection connection) TotalFiles(server string) (*types.TotalFiles, error
 
 // LastJob returns metrics for latest executed server backup
 func (connection connection) LastJob(server string) (*types.LastJob, error) {
-	results, err := connection.DB.Query("SELECT Level,JobBytes,JobFiles,JobErrors,DATE(StartTime) AS JobDate FROM Job WHERE Name LIKE ? ORDER BY StartTime DESC LIMIT 1", server)
+	results, err := connection.DB.Query("SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM Job WHERE Name LIKE ? ORDER BY StartTime DESC LIMIT 1", server)
 
 	if err != nil {
 		return nil, err
@@ -96,7 +96,7 @@ func (connection connection) LastJob(server string) (*types.LastJob, error) {
 
 // LastJob returns metrics for latest executed server backup with Level F
 func (connection connection) LastFullJob(server string) (*types.LastJob, error) {
-	results, err := connection.DB.Query("SELECT Level,JobBytes,JobFiles,JobErrors,DATE(StartTime) AS JobDate FROM Job WHERE Name = ? AND Level = 'F' ORDER BY StartTime DESC LIMIT 1", server)
+	results, err := connection.DB.Query("SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM Job WHERE Name = ? AND Level = 'F' ORDER BY StartTime DESC LIMIT 1", server)
 
 	if err != nil {
 		return nil, err
