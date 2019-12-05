@@ -1,7 +1,7 @@
 package main
 
 import (
-	"./error"
+	"github.com/vierbergenlars/bareos_exporter/error"
 
 	"flag"
 	"fmt"

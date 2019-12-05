@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"../types"
 	_ "github.com/go-sql-driver/mysql" // Keep driver import and usage (in GetConnection) in one file
+	"github.com/vierbergenlars/bareos_exporter/types"
 )
 
 type connection struct {
