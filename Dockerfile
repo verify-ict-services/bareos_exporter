@@ -13,7 +13,7 @@ ENV endpoint /metrics
 ENV port 9625
 
 WORKDIR /bareos_exporter
-COPY --from=builder /workspace/bareos_exporter bareos_exporter
+COPY --from=builder /go/src/github.com/vierbergenlars/bareos_exporter/bareos_exporter bareos_exporter
 
 CMD ./bareos_exporter -port $port -endpoint $endpoint -u $mysql_username -h $mysql_server -P $mysql_port -p pw/auth
 EXPOSE $port
