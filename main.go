@@ -1,17 +1,19 @@
 package main
 
 import (
-	"github.com/vierbergenlars/bareos_exporter/error"
+	"github.com/vierbergenlars/bareos_exporter/dataaccess"
 
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
+
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 )
 
 var connectionString string
@@ -19,11 +21,7 @@ var connectionString string
 var (
 	exporterPort     = flag.Int("port", 9625, "Bareos exporter port")
 	exporterEndpoint = flag.String("endpoint", "/metrics", "Bareos exporter endpoint")
-	mysqlUser        = flag.String("u", "root", "Bareos MySQL username")
-	mysqlAuthFile    = flag.String("p", "./auth", "MySQL password file path")
-	mysqlHostname    = flag.String("h", "127.0.0.1", "MySQL hostname")
-	mysqlPort        = flag.String("P", "3306", "MySQL port")
-	mysqlDb          = flag.String("db", "bareos", "MySQL database name")
+	databaseURL      = flag.String("dsn", "mysql://bareos@unix()/bareos?parseTime=true", "Bareos database DSN")
 )
 
 func init() {
@@ -34,15 +32,28 @@ func init() {
 	}
 }
 
+func splitDsn(dsn string) (string, string, error) {
+	var splitDsn = strings.SplitN(dsn, "://", 2)
+	if len(splitDsn) != 2 {
+		return "", "", fmt.Errorf("Database DSN is incomplete: missing protocol: %s", dsn)
+	}
+	return splitDsn[0], splitDsn[1], nil
+}
+
 func main() {
 	flag.Parse()
 
-	pass, err := ioutil.ReadFile(*mysqlAuthFile)
-	error.Check(err)
+	dbType, connectionString, err := splitDsn(*databaseURL)
+	if err != nil {
+		panic(err.Error())
+	}
 
-	connectionString = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", *mysqlUser, strings.TrimSpace(string(pass)), *mysqlHostname, *mysqlPort, *mysqlDb)
-
-	collector := bareosCollector()
+	connection, err := dataaccess.GetConnection(dbType, connectionString)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer connection.Close()
+	collector := bareosCollector(connection)
 	prometheus.MustRegister(collector)
 
 	http.Handle(*exporterEndpoint, promhttp.Handler())

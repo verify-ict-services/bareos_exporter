@@ -21,9 +21,11 @@ type bareosMetrics struct {
 	LastFullJobTimestamp *prometheus.Desc
 
 	ScheduledJob *prometheus.Desc
+
+	connection *dataaccess.Connection
 }
 
-func bareosCollector() *bareosMetrics {
+func bareosCollector(conn *dataaccess.Connection) *bareosMetrics {
 	return &bareosMetrics{
 		TotalFiles: prometheus.NewDesc("bareos_files_saved_total",
 			"Total files saved for server during all backups for hostname combined",
@@ -69,6 +71,7 @@ func bareosCollector() *bareosMetrics {
 			"Probable execution timestamp of next backup for hostname",
 			[]string{"hostname"}, nil,
 		),
+		connection: conn,
 	}
 }
 
@@ -87,16 +90,8 @@ func (collector *bareosMetrics) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (collector *bareosMetrics) Collect(ch chan<- prometheus.Metric) {
-	connection, connectionErr := dataaccess.GetConnection(connectionString)
 
-	defer connection.DB.Close()
-
-	if connectionErr != nil {
-		log.Error(connectionErr)
-		return
-	}
-
-	var servers, getServerListErr = connection.GetServerList()
+	var servers, getServerListErr = collector.connection.GetServerList()
 
 	if getServerListErr != nil {
 		log.Error(getServerListErr)
@@ -104,11 +99,11 @@ func (collector *bareosMetrics) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, server := range servers {
-		serverFiles, filesErr := connection.TotalFiles(server)
-		serverBytes, bytesErr := connection.TotalBytes(server)
-		lastServerJob, jobErr := connection.LastJob(server)
-		lastFullServerJob, fullJobErr := connection.LastFullJob(server)
-		scheduledJob, scheduledJobErr := connection.ScheduledJobs(server)
+		serverFiles, filesErr := collector.connection.TotalFiles(server)
+		serverBytes, bytesErr := collector.connection.TotalBytes(server)
+		lastServerJob, jobErr := collector.connection.LastJob(server)
+		lastFullServerJob, fullJobErr := collector.connection.LastFullJob(server)
+		scheduledJob, scheduledJobErr := collector.connection.ScheduledJobs(server)
 
 		if filesErr != nil || bytesErr != nil || jobErr != nil || fullJobErr != nil || scheduledJobErr != nil {
 			log.Info(server)

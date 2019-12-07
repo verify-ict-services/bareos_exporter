@@ -3,30 +3,71 @@ package dataaccess
 import (
 	"database/sql"
 	"fmt"
-	"time"
-
-	_ "github.com/go-sql-driver/mysql" // Keep driver import and usage (in GetConnection) in one file
 	"github.com/vierbergenlars/bareos_exporter/types"
+	"time"
 )
 
-type connection struct {
-	DB *sql.DB
+// Connection to database, and database specific queries
+type Connection struct {
+	db      *sql.DB
+	queries *sqlQueries
+}
+
+type sqlQueries struct {
+	ServerList    string
+	TotalBytes    string
+	TotalFiles    string
+	LastJob       string
+	LastFullJob   string
+	ScheduledJobs string
+}
+
+var mysqlQueries *sqlQueries = &sqlQueries{
+	ServerList:    "SELECT DISTINCT Name FROM Job WHERE SchedTime >= ?",
+	TotalBytes:    "SELECT SUM(JobBytes) FROM Job WHERE Name=? AND PurgedFiles=0AND JobStatus = 'T'",
+	TotalFiles:    "SELECT SUM(JobFiles) FROM Job WHERE Name=? AND PurgedFiles=0 AND JobStatus = 'T'",
+	LastJob:       "SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM Job WHERE Name = ? AND JobStatus = 'T' ORDER BY StartTime DESC LIMIT 1",
+	LastFullJob:   "SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM Job WHERE Name = ? AND Level = 'F' AND JobStatus = 'T' ORDER BY StartTime DESC LIMIT 1",
+	ScheduledJobs: "SELECT COUNT(SchedTime) AS JobsScheduled FROM Job WHERE Name = ? AND SchedTime >= ?",
+}
+
+var postgresQueries *sqlQueries = &sqlQueries{
+	ServerList:    "SELECT DISTINCT Name FROM job WHERE SchedTime >= ?",
+	TotalBytes:    "SELECT SUM(JobBytes) FROM job WHERE Name=? AND PurgedFiles=0AND JobStatus = 'T'",
+	TotalFiles:    "SELECT SUM(JobFiles) FROM job WHERE Name=? AND PurgedFiles=0 AND JobStatus = 'T'",
+	LastJob:       "SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM job WHERE Name = ? AND JobStatus = 'T' ORDER BY StartTime DESC LIMIT 1",
+	LastFullJob:   "SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM job WHERE Name = ? AND Level = 'F' AND JobStatus = 'T' ORDER BY StartTime DESC LIMIT 1",
+	ScheduledJobs: "SELECT COUNT(SchedTime) AS JobsScheduled FROM job WHERE Name = ? AND SchedTime >= ?",
 }
 
 // GetConnection opens a new db connection
-func GetConnection(connectionString string) (*connection, error) {
-	var connection connection
-	var err error
+func GetConnection(databaseType string, connectionString string) (*Connection, error) {
+	var queries *sqlQueries
+	switch databaseType {
+	case "mysql":
+		queries = mysqlQueries
+	case "postgres":
+		queries = postgresQueries
+	default:
+		return nil, fmt.Errorf("Unknown database type %s", databaseType)
+	}
 
-	connection.DB, err = sql.Open("mysql", connectionString)
+	db, err := sql.Open(databaseType, connectionString)
 
-	return &connection, err
+	if err != nil {
+		return nil, err
+	}
+
+	return &Connection{
+		db:      db,
+		queries: queries,
+	}, nil
 }
 
 // GetServerList reads all servers with scheduled backups for current date
-func (connection connection) GetServerList() ([]string, error) {
+func (connection Connection) GetServerList() ([]string, error) {
 	date := fmt.Sprintf("%s%%", time.Now().AddDate(0, 0, -7).Format("2006-01-02"))
-	results, err := connection.DB.Query("SELECT DISTINCT Name FROM Job WHERE SchedTime >= ?", date)
+	results, err := connection.db.Query(connection.queries.ServerList, date)
 
 	if err != nil {
 		return nil, err
@@ -44,8 +85,8 @@ func (connection connection) GetServerList() ([]string, error) {
 }
 
 // TotalBytes returns total bytes saved for a server since the very first backup
-func (connection connection) TotalBytes(server string) (*types.TotalBytes, error) {
-	results, err := connection.DB.Query("SELECT SUM(JobBytes) FROM Job WHERE Name=? AND PurgedFiles=0", server)
+func (connection Connection) TotalBytes(server string) (*types.TotalBytes, error) {
+	results, err := connection.db.Query(connection.queries.TotalBytes, server)
 
 	if err != nil {
 		return nil, err
@@ -61,8 +102,8 @@ func (connection connection) TotalBytes(server string) (*types.TotalBytes, error
 }
 
 // TotalFiles returns total files saved for a server since the very first backup
-func (connection connection) TotalFiles(server string) (*types.TotalFiles, error) {
-	results, err := connection.DB.Query("SELECT SUM(JobFiles) FROM Job WHERE Name=? AND PurgedFiles=0", server)
+func (connection Connection) TotalFiles(server string) (*types.TotalFiles, error) {
+	results, err := connection.db.Query(connection.queries.TotalFiles, server)
 
 	if err != nil {
 		return nil, err
@@ -78,8 +119,8 @@ func (connection connection) TotalFiles(server string) (*types.TotalFiles, error
 }
 
 // LastJob returns metrics for latest executed server backup
-func (connection connection) LastJob(server string) (*types.LastJob, error) {
-	results, err := connection.DB.Query("SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM Job WHERE Name LIKE ? ORDER BY StartTime DESC LIMIT 1", server)
+func (connection Connection) LastJob(server string) (*types.LastJob, error) {
+	results, err := connection.db.Query(connection.queries.LastJob, server)
 
 	if err != nil {
 		return nil, err
@@ -94,9 +135,9 @@ func (connection connection) LastJob(server string) (*types.LastJob, error) {
 	return &lastJob, err
 }
 
-// LastJob returns metrics for latest executed server backup with Level F
-func (connection connection) LastFullJob(server string) (*types.LastJob, error) {
-	results, err := connection.DB.Query("SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM Job WHERE Name = ? AND Level = 'F' ORDER BY StartTime DESC LIMIT 1", server)
+// LastFullJob returns metrics for latest executed server backup with Level F
+func (connection Connection) LastFullJob(server string) (*types.LastJob, error) {
+	results, err := connection.db.Query(connection.queries.LastFullJob, server)
 
 	if err != nil {
 		return nil, err
@@ -111,10 +152,10 @@ func (connection connection) LastFullJob(server string) (*types.LastJob, error) 
 	return &lastJob, err
 }
 
-// ScheduledTime returns amount of scheduled jobs
-func (connection connection) ScheduledJobs(server string) (*types.ScheduledJob, error) {
+// ScheduledJobs returns amount of scheduled jobs
+func (connection Connection) ScheduledJobs(server string) (*types.ScheduledJob, error) {
 	date := fmt.Sprintf("%s%%", time.Now().Format("2006-01-02"))
-	results, err := connection.DB.Query("SELECT COUNT(SchedTime) AS JobsScheduled FROM Job WHERE Name = ? AND SchedTime >= ?", server, date)
+	results, err := connection.db.Query(connection.queries.ScheduledJobs, server, date)
 
 	if err != nil {
 		return nil, err
@@ -127,4 +168,9 @@ func (connection connection) ScheduledJobs(server string) (*types.ScheduledJob, 
 	}
 
 	return &schedJob, err
+}
+
+// Close the database connection
+func (connection Connection) Close() error {
+	return connection.db.Close()
 }
