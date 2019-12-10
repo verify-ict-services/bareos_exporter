@@ -3,8 +3,10 @@ package dataaccess
 import (
 	"database/sql"
 	"fmt"
-	"github.com/vierbergenlars/bareos_exporter/types"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/vierbergenlars/bareos_exporter/types"
 )
 
 // Connection to database, and database specific queries
@@ -24,7 +26,7 @@ type sqlQueries struct {
 
 var mysqlQueries *sqlQueries = &sqlQueries{
 	ServerList:    "SELECT DISTINCT Name FROM Job WHERE SchedTime >= ?",
-	TotalBytes:    "SELECT SUM(JobBytes) FROM Job WHERE Name=? AND PurgedFiles=0AND JobStatus = 'T'",
+	TotalBytes:    "SELECT SUM(JobBytes) FROM Job WHERE Name=? AND PurgedFiles=0 AND JobStatus = 'T'",
 	TotalFiles:    "SELECT SUM(JobFiles) FROM Job WHERE Name=? AND PurgedFiles=0 AND JobStatus = 'T'",
 	LastJob:       "SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM Job WHERE Name = ? AND JobStatus = 'T' ORDER BY StartTime DESC LIMIT 1",
 	LastFullJob:   "SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM Job WHERE Name = ? AND Level = 'F' AND JobStatus = 'T' ORDER BY StartTime DESC LIMIT 1",
@@ -32,12 +34,12 @@ var mysqlQueries *sqlQueries = &sqlQueries{
 }
 
 var postgresQueries *sqlQueries = &sqlQueries{
-	ServerList:    "SELECT DISTINCT Name FROM job WHERE SchedTime >= ?",
-	TotalBytes:    "SELECT SUM(JobBytes) FROM job WHERE Name=? AND PurgedFiles=0AND JobStatus = 'T'",
-	TotalFiles:    "SELECT SUM(JobFiles) FROM job WHERE Name=? AND PurgedFiles=0 AND JobStatus = 'T'",
-	LastJob:       "SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM job WHERE Name = ? AND JobStatus = 'T' ORDER BY StartTime DESC LIMIT 1",
-	LastFullJob:   "SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM job WHERE Name = ? AND Level = 'F' AND JobStatus = 'T' ORDER BY StartTime DESC LIMIT 1",
-	ScheduledJobs: "SELECT COUNT(SchedTime) AS JobsScheduled FROM job WHERE Name = ? AND SchedTime >= ?",
+	ServerList:    "SELECT DISTINCT Name FROM job WHERE SchedTime >= $1",
+	TotalBytes:    "SELECT SUM(JobBytes) FROM job WHERE Name=$1 AND PurgedFiles=0 AND JobStatus = 'T'",
+	TotalFiles:    "SELECT SUM(JobFiles) FROM job WHERE Name=$1 AND PurgedFiles=0 AND JobStatus = 'T'",
+	LastJob:       "SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM job WHERE Name = $1 AND JobStatus = 'T' ORDER BY StartTime DESC LIMIT 1",
+	LastFullJob:   "SELECT Level,JobBytes,JobFiles,JobErrors,StartTime FROM job WHERE Name = $1 AND Level = 'F' AND JobStatus = 'T' ORDER BY StartTime DESC LIMIT 1",
+	ScheduledJobs: "SELECT COUNT(SchedTime) AS JobsScheduled FROM job WHERE Name = $1 AND SchedTime >= $2",
 }
 
 // GetConnection opens a new db connection
@@ -66,8 +68,9 @@ func GetConnection(databaseType string, connectionString string) (*Connection, e
 
 // GetServerList reads all servers with scheduled backups for current date
 func (connection Connection) GetServerList() ([]string, error) {
-	date := fmt.Sprintf("%s%%", time.Now().AddDate(0, 0, -7).Format("2006-01-02"))
-	results, err := connection.db.Query(connection.queries.ServerList, date)
+	date := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
+	results, err := connection.execQuery(connection.queries.ServerList, date)
+	defer results.Close()
 
 	if err != nil {
 		return nil, err
@@ -78,15 +81,30 @@ func (connection Connection) GetServerList() ([]string, error) {
 	for results.Next() {
 		var server string
 		err = results.Scan(&server)
+		if err != nil {
+			return nil, err
+		}
 		servers = append(servers, server)
 	}
 
 	return servers, err
 }
 
+func (connection Connection) execQuery(query string, args ...interface{}) (*sql.Rows, error) {
+	results, err := connection.db.Query(query, args...)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"query": query,
+			"args":  args,
+		}).Error(err)
+	}
+	return results, err
+}
+
 // TotalBytes returns total bytes saved for a server since the very first backup
 func (connection Connection) TotalBytes(server string) (*types.TotalBytes, error) {
-	results, err := connection.db.Query(connection.queries.TotalBytes, server)
+	results, err := connection.execQuery(connection.queries.TotalBytes, server)
+	defer results.Close()
 
 	if err != nil {
 		return nil, err
@@ -95,7 +113,6 @@ func (connection Connection) TotalBytes(server string) (*types.TotalBytes, error
 	var totalBytes types.TotalBytes
 	if results.Next() {
 		err = results.Scan(&totalBytes.Bytes)
-		results.Close()
 	}
 
 	return &totalBytes, err
@@ -103,7 +120,8 @@ func (connection Connection) TotalBytes(server string) (*types.TotalBytes, error
 
 // TotalFiles returns total files saved for a server since the very first backup
 func (connection Connection) TotalFiles(server string) (*types.TotalFiles, error) {
-	results, err := connection.db.Query(connection.queries.TotalFiles, server)
+	results, err := connection.execQuery(connection.queries.TotalFiles, server)
+	defer results.Close()
 
 	if err != nil {
 		return nil, err
@@ -112,7 +130,6 @@ func (connection Connection) TotalFiles(server string) (*types.TotalFiles, error
 	var totalFiles types.TotalFiles
 	if results.Next() {
 		err = results.Scan(&totalFiles.Files)
-		results.Close()
 	}
 
 	return &totalFiles, err
@@ -120,7 +137,8 @@ func (connection Connection) TotalFiles(server string) (*types.TotalFiles, error
 
 // LastJob returns metrics for latest executed server backup
 func (connection Connection) LastJob(server string) (*types.LastJob, error) {
-	results, err := connection.db.Query(connection.queries.LastJob, server)
+	results, err := connection.execQuery(connection.queries.LastJob, server)
+	defer results.Close()
 
 	if err != nil {
 		return nil, err
@@ -129,7 +147,6 @@ func (connection Connection) LastJob(server string) (*types.LastJob, error) {
 	var lastJob types.LastJob
 	if results.Next() {
 		err = results.Scan(&lastJob.Level, &lastJob.JobBytes, &lastJob.JobFiles, &lastJob.JobErrors, &lastJob.JobDate)
-		results.Close()
 	}
 
 	return &lastJob, err
@@ -137,7 +154,8 @@ func (connection Connection) LastJob(server string) (*types.LastJob, error) {
 
 // LastFullJob returns metrics for latest executed server backup with Level F
 func (connection Connection) LastFullJob(server string) (*types.LastJob, error) {
-	results, err := connection.db.Query(connection.queries.LastFullJob, server)
+	results, err := connection.execQuery(connection.queries.LastFullJob, server)
+	defer results.Close()
 
 	if err != nil {
 		return nil, err
@@ -146,7 +164,6 @@ func (connection Connection) LastFullJob(server string) (*types.LastJob, error) 
 	var lastJob types.LastJob
 	if results.Next() {
 		err = results.Scan(&lastJob.Level, &lastJob.JobBytes, &lastJob.JobFiles, &lastJob.JobErrors, &lastJob.JobDate)
-		results.Close()
 	}
 
 	return &lastJob, err
@@ -154,8 +171,9 @@ func (connection Connection) LastFullJob(server string) (*types.LastJob, error) 
 
 // ScheduledJobs returns amount of scheduled jobs
 func (connection Connection) ScheduledJobs(server string) (*types.ScheduledJob, error) {
-	date := fmt.Sprintf("%s%%", time.Now().Format("2006-01-02"))
-	results, err := connection.db.Query(connection.queries.ScheduledJobs, server, date)
+	date := time.Now().Format("2006-01-02")
+	results, err := connection.execQuery(connection.queries.ScheduledJobs, server, date)
+	defer results.Close()
 
 	if err != nil {
 		return nil, err

@@ -94,7 +94,9 @@ func (collector *bareosMetrics) Collect(ch chan<- prometheus.Metric) {
 	var servers, getServerListErr = collector.connection.GetServerList()
 
 	if getServerListErr != nil {
-		log.Error(getServerListErr)
+		log.WithFields(log.Fields{
+			"method": "GetServerList",
+		}).Error(getServerListErr)
 		return
 	}
 
@@ -110,23 +112,33 @@ func (collector *bareosMetrics) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		if filesErr != nil {
-			log.Error(filesErr)
+			log.WithFields(log.Fields{
+				"method": "TotalFiles",
+			}).Error(filesErr)
 		}
 
 		if bytesErr != nil {
-			log.Error(bytesErr)
+			log.WithFields(log.Fields{
+				"method": "TotalBytes",
+			}).Error(bytesErr)
 		}
 
 		if jobErr != nil {
-			log.Error(jobErr)
+			log.WithFields(log.Fields{
+				"method": "LastJob",
+			}).Error(jobErr)
 		}
 
 		if fullJobErr != nil {
-			log.Error(fullJobErr)
+			log.WithFields(log.Fields{
+				"method": "LastFullJob",
+			}).Error(fullJobErr)
 		}
 
 		if scheduledJobErr != nil {
-			log.Error(scheduledJobErr)
+			log.WithFields(log.Fields{
+				"method": "ScheduledJobs",
+			}).Error(scheduledJobErr)
 		}
 
 		ch <- prometheus.MustNewConstMetric(collector.TotalFiles, prometheus.CounterValue, float64(serverFiles.Files), server)
