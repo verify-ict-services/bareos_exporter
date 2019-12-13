@@ -14,5 +14,5 @@ WORKDIR /bareos_exporter
 COPY --from=builder /go/src/github.com/vierbergenlars/bareos_exporter/bareos_exporter bareos_exporter
 
 ENTRYPOINT ["./bareos_exporter"]
-CMD ["-port", "$port", "-endpoint", "$endpoint", "-dsn" "$dsn"]
+CMD ["-port", "$port", "-endpoint", "$endpoint", "-dsn", "$dsn"]
 EXPOSE $port
