@@ -10,7 +10,7 @@
 2. **(optional)** [Overwrite](https://docs.docker.com/engine/reference/run/#env-environment-variables) default args using ENV variables
 3. Run docker image as follows
 ```bash
-docker run --name bareos_exporter -p 9625:9625 -v /your/password/file:/bareos_exporter/pw/auth -d vierbergenlars/bareos_exporter:latest
+docker run --name bareos_exporter -p 9625:9625 -d vierbergenlars/bareos_exporter:latest -dsn mysql://user:password@host/dbname
 ```
 ### Metrics
 
@@ -25,8 +25,4 @@ Name    | Description                                                           
 --------|---------------------------------------------------------------------------------------------|----------------------
 port    | Bareos exporter port                                                                        | 9625
 endpoint| Bareos exporter endpoint.                                                                   | "/metrics"
-u       | Username used to access Bareos MySQL Database                                               | "root"
-p       | Path to file containing your MySQL password. Written inside a file to prevent from leaking. | "./auth"
-h       | MySQL instance hostname.                                                                    | "127.0.0.1"
-P       | MySQL instance port.                                                                        | "3306"
-db      | MySQL database name.                                                                        | "bareos"
+dsn     | Data source name of the database that is used by bareos. Protocol can be `mysql://` or `postgresql://`. The rest of the string is passed to the database driver. | "mysql://bareos@unix()/bareos?parseTime=true"
