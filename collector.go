@@ -96,7 +96,7 @@ func (collector *bareosMetrics) Describe(ch chan<- *prometheus.Desc) {
 }
 
 var bareosTerminationStates = []string{
-	"C", "R", "B", "T", "E", "e", "f", "D", "A", "I", "L", "W", "I", "q", "F", "S", "m", "M", "s", "j", "c", "d", "t", "p", "i", "a",
+	"C", "R", "B", "T", "E", "e", "f", "D", "A", "I", "L", "W", "l", "q", "F", "S", "m", "M", "s", "j", "c", "d", "t", "p", "i", "a",
 }
 
 func (collector *bareosMetrics) Collect(ch chan<- prometheus.Metric) {
