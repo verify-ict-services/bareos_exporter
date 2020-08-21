@@ -14,6 +14,7 @@ type bareosMetrics struct {
 	LastJobFiles     *prometheus.Desc
 	LastJobErrors    *prometheus.Desc
 	LastJobTimestamp *prometheus.Desc
+	LastJobStatus    *prometheus.Desc
 
 	LastFullJobBytes     *prometheus.Desc
 	LastFullJobFiles     *prometheus.Desc
@@ -51,6 +52,10 @@ func bareosCollector(conn *dataaccess.Connection) *bareosMetrics {
 			"Execution timestamp of last backup for hostname",
 			[]string{"hostname", "level"}, nil,
 		),
+		LastJobStatus: prometheus.NewDesc("bareos_last_backup_job_status",
+			"Termination status of the last backup for hostname",
+			[]string{"hostname", "status"}, nil,
+		),
 		LastFullJobBytes: prometheus.NewDesc("bareos_last_full_backup_job_bytes_saved_total",
 			"Total bytes saved during last full backup (Level = F) for hostname",
 			[]string{"hostname"}, nil,
@@ -82,11 +87,16 @@ func (collector *bareosMetrics) Describe(ch chan<- *prometheus.Desc) {
 	ch <- collector.LastJobFiles
 	ch <- collector.LastJobErrors
 	ch <- collector.LastJobTimestamp
+	ch <- collector.LastJobStatus
 	ch <- collector.LastFullJobBytes
 	ch <- collector.LastFullJobFiles
 	ch <- collector.LastFullJobErrors
 	ch <- collector.LastFullJobTimestamp
 	ch <- collector.ScheduledJob
+}
+
+var bareosTerminationStates = []string{
+	"C", "R", "B", "T", "E", "e", "f", "D", "A", "I", "L", "W", "I", "q", "F", "S", "m", "M", "s", "j", "c", "d", "t", "p", "i", "a",
 }
 
 func (collector *bareosMetrics) Collect(ch chan<- prometheus.Metric) {
@@ -106,8 +116,9 @@ func (collector *bareosMetrics) Collect(ch chan<- prometheus.Metric) {
 		lastServerJob, jobErr := collector.connection.LastJob(server)
 		lastFullServerJob, fullJobErr := collector.connection.LastFullJob(server)
 		scheduledJob, scheduledJobErr := collector.connection.ScheduledJobs(server)
+		lastJobStatus, lastJobStatusErr := collector.connection.LastJobStatus(server)
 
-		if filesErr != nil || bytesErr != nil || jobErr != nil || fullJobErr != nil || scheduledJobErr != nil {
+		if filesErr != nil || bytesErr != nil || jobErr != nil || fullJobErr != nil || scheduledJobErr != nil || lastJobStatusErr != nil {
 			log.Info(server)
 		}
 
@@ -141,6 +152,13 @@ func (collector *bareosMetrics) Collect(ch chan<- prometheus.Metric) {
 			}).Error(scheduledJobErr)
 		}
 
+		if lastJobStatus != nil {
+
+			log.WithFields(log.Fields{
+				"method": "LastJobStatus",
+			}).Error(lastJobStatusErr)
+		}
+
 		ch <- prometheus.MustNewConstMetric(collector.TotalFiles, prometheus.CounterValue, float64(serverFiles.Files), server)
 		ch <- prometheus.MustNewConstMetric(collector.TotalBytes, prometheus.CounterValue, float64(serverBytes.Bytes), server)
 
@@ -148,6 +166,17 @@ func (collector *bareosMetrics) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(collector.LastJobFiles, prometheus.CounterValue, float64(lastServerJob.JobFiles), server, lastServerJob.Level)
 		ch <- prometheus.MustNewConstMetric(collector.LastJobErrors, prometheus.CounterValue, float64(lastServerJob.JobErrors), server, lastServerJob.Level)
 		ch <- prometheus.MustNewConstMetric(collector.LastJobTimestamp, prometheus.CounterValue, float64(lastServerJob.JobDate.Unix()), server, lastServerJob.Level)
+		for _, terminationState := range bareosTerminationStates {
+			var state = float64(0)
+			if lastJobStatus != nil {
+				if terminationState == *lastJobStatus {
+					state = 1
+				}
+			}
+
+			ch <- prometheus.MustNewConstMetric(collector.LastJobStatus, prometheus.CounterValue, state, server, terminationState)
+
+		}
 
 		ch <- prometheus.MustNewConstMetric(collector.LastFullJobBytes, prometheus.CounterValue, float64(lastFullServerJob.JobBytes), server)
 		ch <- prometheus.MustNewConstMetric(collector.LastFullJobFiles, prometheus.CounterValue, float64(lastFullServerJob.JobFiles), server)
@@ -155,5 +184,6 @@ func (collector *bareosMetrics) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(collector.LastFullJobTimestamp, prometheus.CounterValue, float64(lastFullServerJob.JobDate.Unix()), server)
 
 		ch <- prometheus.MustNewConstMetric(collector.ScheduledJob, prometheus.CounterValue, float64(scheduledJob.ScheduledJobs), server)
+
 	}
 }
