@@ -16,12 +16,19 @@ import (
 	_ "github.com/lib/pq"
 )
 
+const (
+  host     = "___POSTGRESQL_HOST___"
+  port     = 5432
+  user     = "___POSTGRESQL_READ_ONLY_USER___"
+  password = "___POSTGRESQL_PASSWORD___"
+  dbname   = "___POSTGRESQL_DB___"
+)
+
 var connectionString string
 
 var (
 	exporterPort     = flag.Int("port", 9625, "Bareos exporter port")
 	exporterEndpoint = flag.String("endpoint", "/metrics", "Bareos exporter endpoint")
-	databaseURL      = flag.String("dsn", "mysql://bareos@unix()/bareos?parseTime=true", "Bareos database DSN")
 )
 
 func init() {
@@ -32,27 +39,19 @@ func init() {
 	}
 }
 
-func splitDsn(dsn string) (string, string, error) {
-	var splitDsn = strings.SplitN(dsn, "://", 2)
-	if len(splitDsn) != 2 {
-		return "", "", fmt.Errorf("Database DSN is incomplete: missing protocol: %s", dsn)
-	}
-	return splitDsn[0], splitDsn[1], nil
-}
-
 func main() {
 	flag.Parse()
 
-	dbType, connectionString, err := splitDsn(*databaseURL)
-	if err != nil {
-		panic(err.Error())
-	}
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
+	  "password=%s dbname=%s sslmode=disable",
+	  host, port, user, password, dbname)
 
-	connection, err := dataaccess.GetConnection(dbType, connectionString)
+	connection, err := dataaccess.GetConnection("postgres", psqlInfo)
 	if err != nil {
 		panic(err.Error())
 	}
 	defer connection.Close()
+
 	collector := bareosCollector(connection)
 	prometheus.MustRegister(collector)
 
