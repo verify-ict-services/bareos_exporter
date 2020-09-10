@@ -26,3 +26,8 @@ docker run --name bareos_exporter -p 9625:9625 -d verify-ict-services/bareos_exp
 - Latest full job (level = F) metrics
 - Amount of scheduled jobs
 
+### Other steps not documented but reach out to us
+
+- update your Prometheus configuration in K8s
+- create a DS in Grafana and a dashboard
+- create an alerting to a Slack channel
