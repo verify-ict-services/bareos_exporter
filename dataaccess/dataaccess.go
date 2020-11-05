@@ -6,7 +6,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/vierbergenlars/bareos_exporter/types"
+	"github.com/verify-ict-services/bareos_exporter/types"
 )
 
 // Connection to database, and database specific queries
