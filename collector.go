@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/vierbergenlars/bareos_exporter/dataaccess"
+	"github.com/verify-ict-services/bareos_exporter/dataaccess"
 
 	log "github.com/sirupsen/logrus"
 )
