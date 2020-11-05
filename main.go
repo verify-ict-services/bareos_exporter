@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/vierbergenlars/bareos_exporter/dataaccess"
+	"github.com/verify-ict-services/bareos_exporter/dataaccess"
 
 	"flag"
 	"fmt"
