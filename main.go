@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
